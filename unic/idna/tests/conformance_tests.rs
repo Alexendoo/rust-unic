@@ -87,6 +87,11 @@ fn assert_unicode(source: &str, expected: &str, status: &str, line_idx: usize)
             return;
         }
 
+        if status == "[X4_2]" {
+            // Ignore?
+            return;
+        }
+
         assert_eq!(
             status,
             "[]",
