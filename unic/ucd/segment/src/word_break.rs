@@ -66,7 +66,8 @@ char_property! {
 
         /// ```text
         /// Grapheme_Extend = Yes, or
-        /// General_Category = Spacing_Mark
+        /// General_Category = Spacing_Mark, or
+        /// Emoji_Modifier=Yes in emoji-data.txt (See [UTS51])
         /// and not U+200D ZERO WIDTH JOINER (ZWJ)
         /// ```
         Extend {
@@ -144,7 +145,7 @@ char_property! {
 
         /// ```text
         /// Alphabetic = Yes, or
-        /// any of the following 36 characters:
+        /// any of the following characters:
         /// U+02C2 ( ˂ ) MODIFIER LETTER LEFT ARROWHEAD
         /// ..U+02C5 ( ˅ ) MODIFIER LETTER DOWN ARROWHEAD
         /// U+02D2 ( ˒ ) MODIFIER LETTER CENTRED RIGHT HALF RING
@@ -160,6 +161,9 @@ char_property! {
         /// U+A789 ( ꞉ ) MODIFIER LETTER COLON
         /// U+A78A ( ꞊ ) MODIFIER LETTER SHORT EQUALS SIGN
         /// U+AB5B ( ꭛ ) MODIFIER BREVE WITH INVERTED BREVE
+        /// U+055B ( ՛ ) ARMENIAN EMPHASIS MARK
+        /// U+055C ( ՜ ) ARMENIAN EXCLAMATION MARK
+        /// U+055E ( ՞ ) ARMENIAN QUESTION MARK
         /// and Ideographic = No
         /// and Word_Break ≠ Katakana
         /// and Line_Break ≠ Complex_Context (SA)
@@ -260,45 +264,14 @@ char_property! {
             human => "Extend Numeric/Letter",
         }
 
-        // Emoji
-
-        /// Emoji characters listed as `Emoji_Modifier_Base=Yes` in `emoji-data.txt`, which do not
-        /// occur after ZWJ in `emoji-zwj-sequences.txt`.
-        ///
-        /// See <https://www.unicode.org/reports/tr51/>.
-        EBase {
-            abbr => EB,
-            long => E_Base,
-            human => "Emoji Base",
-        }
-
-        /// Emoji characters listed as `Emoji_Modifer=Yes` in `emoji-data.txt`.
-        ///
-        /// See <https://www.unicode.org/reports/tr51/>.
-        EModifier {
-            abbr => EM,
-            long => E_Modifier,
-            human => "Emoji Modifier",
-        }
-
-        /// Emoji characters that do not break from a previous ZWJ in a defined emoji ZWJ sequence,
-        /// and are not listed as `Emoji_Modifier_Base=Yes` in `emoji-data.txt`.
-        ///
-        /// See <https://www.unicode.org/reports/tr51/>.
-        GlueAfterZwj {
-            abbr => GAZ,
-            long => Glue_After_Zwj,
-            human => "Glue After ZWJ",
-        }
-
-        /// Emoji characters listed as `Emoji_Modifer_Base=Yes` in `emoji_data.txt`, and also occur
-        /// after ZWJ in `emoji-zwj-sequences.txt`.
-        ///
-        /// See <https://www.unicode.org/reports/tr51/>.
-        EBaseGAZ {
-            abbr => EBG,
-            long => E_Base_GAZ,
-            human => "Emoji Base and Glue After ZWJ",
+        /// ```text
+        /// General_Category = Zs
+        /// and not Linebreak = Glue
+        /// ```
+        WSegSpace {
+            abbr => WSegSpace,
+            long => WSegSpace,
+            human => "WSegSpace",
         }
 
         /// All other characters
@@ -362,6 +335,7 @@ mod tests {
     #[test]
     fn test_ascii() {
         assert_eq!(WB::of('\u{0000}'), WB::Other);
+        assert_eq!(WB::of('\u{0020}'), WB::WSegSpace);
         assert_eq!(WB::of('\u{0040}'), WB::Other);
         assert_eq!(WB::of('\u{0041}'), WB::ALetter);
         assert_eq!(WB::of('\u{0062}'), WB::ALetter);

@@ -17,6 +17,7 @@
 
 use std::cmp;
 
+use unic_emoji_char::is_extended_pictographic;
 use unic_ucd_segment::GraphemeClusterBreak as GCB;
 
 /// External iterator for grapheme clusters and byte offsets.
@@ -188,7 +189,7 @@ enum GraphemeState {
     Regional,
     // The codepoint after is in the E_Modifier category, so whether it's a boundary
     // depends on pre-context according to GB10.
-    Emoji,
+    // Emoji,
 }
 
 /// Cursor-based segmenter for grapheme clusters.
@@ -305,11 +306,8 @@ fn check_pair(before: GCB, after: GCB) -> PairResult {
         (GCB::Prepend, _) => Extended,     // GB9b
 
         // Do not break within Emoji Modifier Sequences or Emoji ZWJ Sequences.
-        (GCB::EBase, GCB::EModifier) => NotBreak,    // GB10
-        (GCB::EBaseGAZ, GCB::EModifier) => NotBreak, // GB10
-        (GCB::Extend, GCB::EModifier) => Emoji,      // GB10
-        (GCB::ZWJ, GCB::GlueAfterZwj) => NotBreak,   // GB11
-        (GCB::ZWJ, GCB::EBaseGAZ) => NotBreak,       // GB11
+        (GCB::ZWJ, _) => Emoji, // GB11
+
 
         // Do not break within emoji flag sequences. That is, do not break between regional
         // indicator (RI) symbols if there is an odd number of RI characters before the break point.
@@ -460,7 +458,7 @@ impl GraphemeCursor {
         }
         match self.state {
             GraphemeState::Regional => self.handle_regional(chunk, chunk_start),
-            GraphemeState::Emoji => self.handle_emoji(chunk, chunk_start),
+            // GraphemeState::Emoji => self.handle_emoji(chunk, chunk_start),
             _ => panic!("invalid state"),
         }
     }
@@ -510,17 +508,29 @@ impl GraphemeCursor {
 
     fn handle_emoji(&mut self, chunk: &str, chunk_start: usize) {
         for ch in chunk.chars().rev() {
-            match GCB::of(ch) {
-                GCB::Extend => (),
-                GCB::EBase | GCB::EBaseGAZ => {
-                    self.decide(false);
-                    return;
-                }
-                _ => {
-                    self.decide(true);
-                    return;
-                }
+            if GCB::of(ch) == GCB::Extend {
+                continue;
             }
+
+            if is_extended_pictographic(ch) {
+                self.decide(false);
+                return;
+            }
+
+            self.decide(true);
+            return;
+
+            // match GCB::of(ch) {
+            //     GCB::Extend => (),
+            //     GCB::EBase | GCB::EBaseGAZ => {
+            //         self.decide(false);
+            //         return;
+            //     }
+            //     _ => {
+            //         self.decide(true);
+            //         return;
+            //     }
+            // }
         }
         if chunk_start == 0 {
             self.decide(true);
@@ -584,7 +594,7 @@ impl GraphemeCursor {
             let mut need_pre_context = true;
             match self.cat_after.unwrap() {
                 GCB::RegionalIndicator => self.state = GraphemeState::Regional,
-                GCB::EModifier => self.state = GraphemeState::Emoji,
+                // GCB::EModifier => self.state = GraphemeState::Emoji,
                 _ => need_pre_context = self.cat_before.is_none(),
             }
             if need_pre_context {

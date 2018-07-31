@@ -70,8 +70,8 @@ char_property! {
         }
 
         /// ```text
-        /// Grapheme_Extend = Yes
-        ///
+        /// Grapheme_Extend = Yes, or
+        /// Emoji_Modifier=Yes in emoji-data.txt (See [UTS51])
         /// This includes:
         /// General_Category = Nonspacing_Mark
         /// General_Category = Enclosing_Mark
@@ -250,47 +250,6 @@ char_property! {
             abbr => LVT,
             long => LVT,
             human => "Hangul Syllable Type LVT",
-        }
-
-        // Emoji
-
-        /// Emoji characters listed as `Emoji_Modifier_Base=Yes` in `emoji-data.txt`, which do not
-        /// occur after ZWJ in `emoji-zwj-sequences.txt`.
-        ///
-        /// See <https://www.unicode.org/reports/tr51/>.
-        EBase {
-            abbr => EB,
-            long => E_Base,
-            human => "Emoji Base",
-        }
-
-        /// Emoji characters listed as `Emoji_Modifer=Yes` in `emoji-data.txt`.
-        ///
-        /// See <https://www.unicode.org/reports/tr51/>.
-        EModifier {
-            abbr => EM,
-            long => E_Modifier,
-            human => "Emoji Modifier",
-        }
-
-        /// Emoji characters that do not break from a previous ZWJ in a defined emoji ZWJ sequence,
-        /// and are not listed as `Emoji_Modifier_Base=Yes` in `emoji-data.txt`.
-        ///
-        /// See <https://www.unicode.org/reports/tr51/>.
-        GlueAfterZwj {
-            abbr => GAZ,
-            long => Glue_After_Zwj,
-            human => "Glue After ZWJ",
-        }
-
-        /// Emoji characters listed as `Emoji_Modifer_Base=Yes` in `emoji_data.txt`, and also occur
-        /// after ZWJ in `emoji-zwj-sequences.txt`.
-        ///
-        /// See <https://www.unicode.org/reports/tr51/>.
-        EBaseGAZ {
-            abbr => EBG,
-            long => E_Base_GAZ,
-            human => "Emoji Base and Glue After ZWJ",
         }
 
         /// All other characters

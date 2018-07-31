@@ -18,6 +18,7 @@
 use std::cmp;
 use std::iter::Filter;
 
+use unic_emoji_char::is_extended_pictographic;
 use unic_ucd_segment::WordBreak as WB;
 
 /// An iterator over the substrings of a string which, after splitting the string on [word
@@ -132,12 +133,12 @@ enum WordBoundsState {
     Letter,
     HLetter,
     Numeric,
+    Space,
     Katakana,
     ExtendNumLet,
     Regional(RegionalState),
     FormatExtend(FormatExtendType),
     Zwj,
-    Emoji,
 }
 
 // subtypes for FormatExtend state in WordBoundsState
@@ -185,12 +186,13 @@ impl<'a> Iterator for WordBounds<'a> {
         let mut cat = WB::Other;
         let mut savecat = WB::Other;
 
-        // Whether or not the previous category was ZWJ
-        // ZWJs get collapsed, so this handles precedence of WB3c over WB4
-        let mut prev_zwj;
         for (curr, ch) in self.string.char_indices() {
             idx = curr;
-            prev_zwj = cat == WB::ZWJ;
+
+            // Whether or not the previous category was ZWJ
+            // ZWJs get collapsed, so this handles precedence of WB3c and WB3d over WB4
+            let prev_cat = cat;
+
             // if there's a category cached, grab it
             cat = match self.cat {
                 None => WB::of(ch),
@@ -213,32 +215,29 @@ impl<'a> Iterator for WordBounds<'a> {
                 }
             }
 
-            // rule WB3c
+            // rule WB3c + WB3d
+            //
             // WB4 makes all ZWJs collapse into the previous state
             // but you can still be in a Zwj state if you started with Zwj
             //
             // This means that Zwj + Extend will collapse into Zwj, which is wrong,
-            // since Extend has a boundary with following EBG/GAZ chars but ZWJ doesn't,
+            // since Extend has a boundary with following ExtPict chars but ZWJ doesn't,
             // and that rule (WB3c) has higher priority
             //
-            // Additionally, Emoji_Base+ZWJ+(EBG/GAZ) will collapse into Emoji_Base+EBG/GAZ
-            // which won't have a boundary even though EB+ZWJ+GAZ should have a boundary.
+            // Thus, we separately keep track of the previous category. This is an additional bit of
+            // state tracked outside of the state enum; the state enum represents the last non-zwj
+            // state encountered. When prev_cat is WB::ZWJ, for the purposes of WB3c, we are in the
+            // Zwj state.
             //
-            // Thus, we separately keep track of whether or not the last character
-            // was a ZWJ. This is an additional bit of state tracked outside of the
-            // state enum; the state enum represents the last non-zwj state encountered.
-            // When prev_zwj is true, for the purposes of WB3c, we are in the Zwj state,
-            // however we are in the previous state for the purposes of all other rules.
-            if prev_zwj {
-                match cat {
-                    WB::GlueAfterZwj => continue,
-                    WB::EBaseGAZ => {
-                        state = Emoji;
-                        continue;
-                    }
-                    _ => (),
-                }
+            // When prev_cat is WB::WSegSpace for WB3d we are in the Space state.
+            //
+            // Otherwise we are in the previous state for the purposes of all other rules.
+            if prev_cat == WB::ZWJ && is_extended_pictographic(ch) {
+                continue;
+            } else if prev_cat == WB::WSegSpace && cat == WB::WSegSpace {
+                continue;
             }
+
             // Don't use `continue` in this match without updating `cat`
             state = match state {
                 Start if cat == WB::CR => {
@@ -257,7 +256,7 @@ impl<'a> Iterator for WordBounds<'a> {
                     WB::RegionalIndicator => Regional(RegionalState::Half), // rule WB13c
                     WB::LF | WB::Newline => break,    // rule WB3a
                     WB::ZWJ => Zwj,                   // rule WB3c
-                    WB::EBase | WB::EBaseGAZ => Emoji, // rule WB14
+                    WB::WSegSpace => Space,           // rule WB3d
                     _ => {
                         if let Some(ncat) = self.get_next_cat(idx) {
                             // rule WB4
@@ -270,9 +269,9 @@ impl<'a> Iterator for WordBounds<'a> {
                         break; // rule WB999
                     }
                 },
-                Zwj => {
-                    // We already handle WB3c above. At this point,
-                    // the current category is not GAZ or EBG,
+                Zwj | Space => {
+                    // We already handle WB3c and WB3d above. At this point,
+                    // the current category is not ExtPict or WSegSpace,
                     // or the previous character was not actually a ZWJ
                     take_curr = false;
                     break;
@@ -351,14 +350,6 @@ impl<'a> Iterator for WordBounds<'a> {
                 Regional(_) => {
                     unreachable!("RegionalState::Unknown should not occur on forward iteration")
                 }
-                Emoji => match cat {
-                    // rule WB14
-                    WB::EModifier => state,
-                    _ => {
-                        take_curr = false;
-                        break;
-                    }
-                },
                 FormatExtend(t) => match t {
                     // handle FormatExtends depending on what type
                     RequireNumeric if cat == WB::Numeric => Numeric, // rule WB11
@@ -458,6 +449,12 @@ impl<'a> DoubleEndedIterator for WordBounds<'a> {
                 take_cat = false;
             }
 
+            if state == Zwj && cat != WB::WSegSpace {
+                take_cat = false;
+                take_curr = false;
+                break;
+            }
+
             // Don't use `continue` in this match without updating `catb`
             state = match state {
                 Start | FormatExtend(AcceptAny) => match cat {
@@ -467,14 +464,14 @@ impl<'a> DoubleEndedIterator for WordBounds<'a> {
                     WB::Katakana => Katakana,         // rule WB13, WB13b
                     WB::ExtendNumLet => ExtendNumLet, // rule WB13a
                     WB::RegionalIndicator => Regional(RegionalState::Unknown), // rule WB13c
-                    WB::GlueAfterZwj | WB::EBaseGAZ => Zwj, // rule WB3c
+                    _ if is_extended_pictographic(ch) => Zwj, // rule WB3c
+                    WB::WSegSpace => Space,           // rule WB3d
                     // rule WB4:
                     WB::Extend | WB::Format | WB::ZWJ => FormatExtend(AcceptAny),
                     WB::SingleQuote => {
                         saveidx = idx;
                         FormatExtend(AcceptQLetter) // rule WB7a
                     }
-                    WB::EModifier => Emoji, // rule WB14
                     WB::CR | WB::LF | WB::Newline => {
                         if state == Start {
                             if cat == WB::LF {
@@ -549,6 +546,13 @@ impl<'a> DoubleEndedIterator for WordBounds<'a> {
                         break;
                     }
                 },
+                Space => match cat {
+                    WB::WSegSpace => Space, // rule WB3d
+                    _ => {
+                        take_curr = false;
+                        break;
+                    }
+                },
                 Regional(mut regional_state) => match cat {
                     // rule WB13c
                     WB::RegionalIndicator => {
@@ -573,14 +577,6 @@ impl<'a> DoubleEndedIterator for WordBounds<'a> {
                             Regional(RegionalState::Full)
                         }
                     }
-                    _ => {
-                        take_curr = false;
-                        break;
-                    }
-                },
-                Emoji => match cat {
-                    // rule WB14
-                    WB::EBase | WB::EBaseGAZ => Zwj,
                     _ => {
                         take_curr = false;
                         break;
@@ -686,7 +682,7 @@ mod tests {
         assert_eq!(
             WordBounds::new("The quick (\"brown\")  fox").collect::<Vec<&str>>(),
             &[
-                "The", " ", "quick", " ", "(", "\"", "brown", "\"", ")", " ", " ", "fox"
+                "The", " ", "quick", " ", "(", "\"", "brown", "\"", ")", "  ", "fox"
             ]
         );
     }

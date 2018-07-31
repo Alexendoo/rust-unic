@@ -74,6 +74,7 @@
 //! );
 //! ```
 
+extern crate unic_emoji_char;
 extern crate unic_ucd_segment;
 
 #[cfg(test)]

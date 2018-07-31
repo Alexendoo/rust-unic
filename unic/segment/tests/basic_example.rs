@@ -45,7 +45,7 @@ fn test_all() {
     assert_eq!(
         WordBounds::new("The quick (\"brown\")  fox").collect::<Vec<&str>>(),
         &[
-            "The", " ", "quick", " ", "(", "\"", "brown", "\"", ")", " ", " ", "fox"
+            "The", " ", "quick", " ", "(", "\"", "brown", "\"", ")", "  ", "fox"
         ]
     );
 
